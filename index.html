@@ -17,7 +17,6 @@
     --border2: #ffffff18;
     --text: #f0f0f8;
     --text-muted: #ffffff44;
-    --text-dim: #ffffff22;
     --accent: #6366f1;
     --accent-soft: #6366f130;
     --accent-hover: #818cf8;
@@ -155,12 +154,7 @@
   }
   .article-card:not(.read)::before { opacity: 1; }
   .article-card:active { background: var(--surface); }
-  .article-card.read > :not(.save-btn-wrap) { opacity: 0.42; }
-  .article-card.read { opacity: 1; }
-  .article-card.read .card-source,
-  .article-card.read .card-title,
-  .article-card.read .card-summary,
-  .article-card.read .card-img { opacity: 0.42; }
+  .article-card.read { opacity: 0.42; }
 
   .card-source {
     display: flex; align-items: center; gap: 6px;
@@ -571,7 +565,6 @@
     font-weight: 600;
   }
 
-
   /* ── FLUX PANEL (liste des sources) ── */
   .flux-panel { display:none; flex:1; overflow-y:auto; padding-bottom:calc(80px + var(--safe-bottom)); }
   .flux-panel.active { display:block; }
@@ -768,8 +761,7 @@
   .save-btn.saved i { color: var(--red) !important; }
   .save-btn:not(.saved):active { background: var(--surface2); }
   /* Forcer la visibilité du bookmark même sur articles lus */
-  .article-card.read .save-btn { opacity: 1 !important; }
-  .article-card.read .save-btn.saved { color: var(--red) !important; }
+
   .form-input {
     width: 100%;
     background: var(--surface2);
@@ -911,6 +903,26 @@
         </div>
       </div>
       <div class="settings-section">
+        <div class="section-header">Sauvegarde des flux</div>
+        <div class="settings-row" style="cursor:pointer" onclick="exportFeeds()">
+          <div>
+            <span class="settings-label">Exporter mes flux</span>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Copie un code à coller lors du prochain import</div>
+          </div>
+          <i class="ti ti-copy" style="color:var(--accent);font-size:18px;"></i>
+        </div>
+        <div class="settings-row" style="gap:10px;">
+          <div style="flex:1">
+            <span class="settings-label">Importer des flux</span>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Colle le code exporté ci-dessous</div>
+          </div>
+        </div>
+        <div style="padding:0 18px 14px;">
+          <div style="display:flex;gap:8px;">
+            <textarea id="importInput" placeholder="Colle ton code ici…" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:12px;resize:none;height:60px;outline:none;line-height:1.4;"></textarea>
+            <button onclick="importFeeds()" style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:0 14px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap;">Importer</button>
+          </div>
+        </div>
         <div class="section-header">Données</div>
         <div class="settings-row" style="cursor:pointer" onclick="markAllRead()">
           <span class="settings-label">Tout marquer comme lu</span>
@@ -1005,7 +1017,6 @@ async function proxyFetch(targetUrl) {
     } catch(e) {
       clearTimeout(timer);
       lastErr = e;
-      console.warn('Proxy failed:', e.message);
     }
   }
   throw lastErr || new Error('Tous les proxies ont échoué');
@@ -1098,8 +1109,6 @@ async function loadDiscoveryArticles(refresh) {
   }
   await Promise.allSettled(DISCOVERY_FEEDS.map(feed => loadOneSource(feed, refresh)));
 }
-
-// renderDiscoveryArticles replaced by renderDiscoveryShell + loadOneSource
 
 function openDiscoveryArticle(i) {
   const a = discoveryArticles[i];
@@ -1410,7 +1419,6 @@ async function addFeed(url, name) {
     showToast('✓ Flux ajouté : ' + newFeed.name);
   } catch(e) {
     showToast('Impossible de charger ce flux');
-    console.error(e);
   }
 }
 
@@ -1589,13 +1597,12 @@ function renderArticles() {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
         ${date ? `<div class="card-date-full" style="margin-top:0"><i class="ti ti-clock"></i> ${date}</div>` : '<div></div>'}
         <button class="save-btn ${state.savedIds.has(a.id) ? 'saved' : ''}" onclick="toggleSave(event,'${a.id}')" title="À lire plus tard">
-          <i class="ti ${state.savedIds.has(a.id) ? 'ti-bookmark-filled' : 'ti-bookmark'}"></i>
+          <i class="ti ti-bookmark" ${state.savedIds.has(a.id) ? 'style="color:var(--red);fill:var(--red);"' : ''}></i>
         </button>
       </div>
     </div>`;
   }).join('');
 }
-
 
 function showFluxList() {
   state.mainTab = 'fluxlist';
@@ -1690,6 +1697,7 @@ function updateFilterTabs() {
 }
 
 function toggleSave(e, id) {
+  e.preventDefault();
   e.stopPropagation();
   if (state.savedIds.has(id)) {
     state.savedIds.delete(id);
@@ -1697,7 +1705,15 @@ function toggleSave(e, id) {
     state.savedIds.add(id);
   }
   save();
-  renderArticles();
+  // Mettre à jour uniquement le bouton cliqué, sans reconstruire tout le DOM
+  const btn = e.currentTarget;
+  if (state.savedIds.has(id)) {
+    btn.classList.add('saved');
+    btn.innerHTML = '<i class="ti ti-bookmark" style="color:var(--red);fill:var(--red);"></i>';
+  } else {
+    btn.classList.remove('saved');
+    btn.innerHTML = '<i class="ti ti-bookmark"></i>';
+  }
   updateFilterTabs();
 }
 
@@ -1843,6 +1859,72 @@ function toggleSetting(key, btn) {
   save();
 }
 
+// ══════════════════════════════════════════════
+//  EXPORT / IMPORT FLUX
+// ══════════════════════════════════════════════
+function exportFeeds() {
+  if (!state.feeds.length) { showToast('Aucun flux à exporter'); return; }
+  const data = { v: 1, feeds: state.feeds.map(f => ({ name: f.name, url: f.url, color: f.color })) };
+  const code = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(code).then(() => {
+      showToast('✓ Code copié ! Colle-le dans Importer');
+    }).catch(() => fallbackCopy(code));
+  } else {
+    fallbackCopy(code);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showToast('✓ Code copié !'); }
+  catch(e) { showToast('Copie manuelle : ' + text.slice(0,20) + '…'); }
+  document.body.removeChild(ta);
+}
+
+async function importFeeds() {
+  const raw = document.getElementById('importInput').value.trim();
+  if (!raw) { showToast('Colle un code exporté'); return; }
+  try {
+    const json = decodeURIComponent(escape(atob(raw)));
+    const data = JSON.parse(json);
+    if (!data.feeds || !Array.isArray(data.feeds)) throw new Error('Format invalide');
+    let added = 0;
+    showToast('Import en cours…');
+    for (const f of data.feeds) {
+      if (!f.url || state.feeds.find(x => x.url === f.url)) continue;
+      try {
+        const text = await proxyFetch(f.url);
+        const feed = parseFeed(text, f.url);
+        const newFeed = {
+          id: Date.now().toString() + Math.random(),
+          url: f.url,
+          name: f.name || feed.title || new URL(f.url).hostname,
+          color: f.color || FEED_COLORS[state.feeds.length % FEED_COLORS.length],
+        };
+        const newArticles = (feed.items || []).map(item => ({
+          ...item, feedId: newFeed.id, feedName: newFeed.name, feedColor: newFeed.color,
+          id: item.link || (newFeed.id + item.title),
+        }));
+        state.feeds.push(newFeed);
+        state.articles = mergeArticles(state.articles, newArticles);
+        added++;
+      } catch(e) {}
+    }
+    save();
+    renderArticles();
+    updateFilterTabs();
+    document.getElementById('importInput').value = '';
+    showToast(added > 0 ? '✓ ' + added + ' flux importé' + (added > 1 ? 's' : '') : 'Flux déjà présents');
+  } catch(e) {
+    showToast('Code invalide');
+  }
+}
+
 function markAllRead() {
   state.articles.forEach(a => state.readIds.add(a.id));
   save();
@@ -1881,20 +1963,6 @@ function formatDiscDate(dateStr) {
     const now = new Date();
     const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     if (d.toDateString() === now.toDateString()) return 'Aujourd\'hui · ' + time;
-    const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
-    if (d.toDateString() === yesterday.toDateString()) return 'Hier · ' + time;
-    const day = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-    return day + ' · ' + time;
-  } catch(e) { return ''; }
-}
-
-function formatDiscDate(dateStr) {
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d)) return '';
-    const now = new Date();
-    const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    if (d.toDateString() === now.toDateString()) return "Aujourd'hui · " + time;
     const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
     if (d.toDateString() === yesterday.toDateString()) return 'Hier · ' + time;
     const day = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -1973,18 +2041,6 @@ function triggerRssAnim() {
   setTimeout(triggerRssAnim, 12000 + Math.random() * 10000);
 }
 // Premier déclenchement après 3-6 secondes
-setTimeout(triggerRssAnim, 3000 + Math.random() * 3000);
-
-// ── ANIMATION ICONE RSS ──
-function triggerRssAnim() {
-  const svg = document.getElementById('rssAnim');
-  if (!svg) return;
-  svg.classList.remove('rss-play');
-  void svg.offsetWidth;
-  svg.classList.add('rss-play');
-  setTimeout(() => svg.classList.remove('rss-play'), 1200);
-  setTimeout(triggerRssAnim, 12000 + Math.random() * 10000);
-}
 setTimeout(triggerRssAnim, 3000 + Math.random() * 3000);
 
 // Auto refresh quand l'app repasse au premier plan
