@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Flux">
+<title>Flux — Lecteur RSS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --border: #2e2e2e;
+    --text: #f0ede8;
+    --text-muted: #7a7672;
+    --accent: #e8d5b0;
+    --accent2: #c4a882;
+    --red: #e06c6c;
+    --safe-top: env(safe-area-inset-top, 44px);
+    --safe-bottom: env(safe-area-inset-bottom, 20px);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%; width: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── APP SHELL ── */
+  #app {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── STATUS BAR SPACER ── */
+  .status-bar {
+    height: var(--safe-top);
+    background: var(--bg);
+    flex-shrink: 0;
+  }
+
+  /* ── VIEWS ── */
+  .view { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  .view.active { display: flex; }
+
+  /* ── TOP HEADER ── */
+  .header {
+    padding: 16px 20px 12px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .header-top { display: flex; align-items: center; justify-content: space-between; }
+  .header-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+  }
+  .header-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    font-weight: 300;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* ── ICON BUTTONS ── */
+  .icon-btn {
+    width: 40px; height: 40px;
+    border: none; background: var(--surface);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--accent);
+    transition: background 0.15s, transform 0.1s;
+    font-size: 18px;
+  }
+  .icon-btn:active { background: var(--surface2); transform: scale(0.93); }
+
+  /* ── FILTER TABS ── */
+  .filter-tabs {
+    display: flex; gap: 8px;
+    padding: 12px 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    padding: 6px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .tab.active {
+    background: var(--accent);
+    color: #0f0f0f;
+    border-color: var(--accent);
+  }
+
+  /* ── SCROLL AREA ── */
+  .scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: calc(80px + var(--safe-bottom));
+  }
+  .scroll-area::-webkit-scrollbar { display: none; }
+
+  /* ── ARTICLE CARD ── */
+  .article-card {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+  .article-card:active { background: var(--surface); }
+  .article-card.read { opacity: 0.5; }
+
+  .card-source {
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 8px;
+  }
+  .source-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .source-name {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+  }
+  .card-date {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+
+  .card-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 17px;
+    line-height: 1.35;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .card-summary {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .card-img {
+    width: 72px; height: 56px;
+    border-radius: 8px;
+    object-fit: cover;
+    float: right;
+    margin-left: 12px;
+    margin-bottom: 4px;
+    background: var(--surface2);
+  }
+
+  .unread-dot {
+    position: absolute;
+    right: 20px; top: 22px;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: calc(60px + var(--safe-bottom));
+    padding-bottom: var(--safe-bottom);
+    background: rgba(15,15,15,0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    padding-top: 8px;
+    z-index: 100;
+  }
+  .nav-item {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: opacity 0.15s;
+    border: none; background: none;
+  }
+  .nav-item:active { opacity: 0.6; }
+  .nav-icon { font-size: 22px; line-height: 1; }
+  .nav-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: 0.3px;
+  }
+  .nav-item.active .nav-label { color: var(--accent); }
+  .nav-item.active .nav-icon { filter: brightness(1.5) sepia(1) hue-rotate(10deg); }
+
+  /* ── FEEDS VIEW ── */
+  .feed-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .feed-item:active { background: var(--surface); }
+  .feed-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .feed-info { flex: 1; min-width: 0; }
+  .feed-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .feed-url {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .feed-count {
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+  .feed-del {
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(224,108,108,0.12);
+    color: var(--red);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* ── ADD FEED FORM ── */
+  .add-feed-form {
+    margin: 20px;
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid var(--border);
+  }
+  .form-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-bottom: 8px;
+    display: block;
+  }
+  .smart-input-wrap {
+    display: flex; gap: 10px; align-items: center;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px 4px 4px 14px;
+    transition: border-color 0.2s;
+    margin-bottom: 0;
+  }
+  .smart-input-wrap:focus-within { border-color: var(--accent2); }
+  .smart-input-wrap input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 9px 0;
+    min-width: 0;
+  }
+  .smart-input-wrap input::placeholder { color: var(--text-muted); }
+  .smart-go-btn {
+    background: var(--accent);
+    color: #0f0f0f;
+    border: none;
+    border-radius: 9px;
+    padding: 9px 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: opacity 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .smart-go-btn:active { opacity: 0.85; transform: scale(0.96); }
+  .smart-go-btn:disabled { opacity: 0.4; }
+
+  /* Discovery results panel */
+  .discovery-panel {
+    margin: 0 20px 16px;
+    background: var(--surface);
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    display: none;
+  }
+  .discovery-panel.visible { display: block; }
+  .discovery-header {
+    padding: 12px 16px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+  }
+  .discovery-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .discovery-item:last-child { border-bottom: none; }
+  .discovery-item:active { background: var(--surface2); }
+  .disc-icon { font-size: 20px; flex-shrink: 0; }
+  .disc-info { flex: 1; min-width: 0; }
+  .disc-name { font-size: 14px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .disc-url { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .disc-add {
+    background: var(--accent);
+    color: #0f0f0f;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .discovery-status {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+
+  .form-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 12px;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus { border-color: var(--accent2); }
+  .form-input::placeholder { color: var(--text-muted); }
+  .btn-primary {
+    width: 100%;
+    background: var(--accent);
+    color: #0f0f0f;
+    border: none;
+    border-radius: 12px;
+    padding: 13px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn-primary:active { opacity: 0.85; transform: scale(0.98); }
+
+  /* ── ARTICLE READER ── */
+  #readerView {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  #readerView.open { transform: translateY(0); }
+
+  .reader-header {
+    padding: calc(var(--safe-top) + 12px) 20px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    flex-shrink: 0;
+    background: var(--bg);
+  }
+  .reader-back {
+    width: 38px; height: 38px;
+    border-radius: 12px;
+    border: none;
+    background: var(--surface);
+    color: var(--accent);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .reader-source-info { flex: 1; min-width: 0; }
+  .reader-source-name {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .reader-date { font-size: 11px; color: var(--text-muted); }
+  .reader-open-btn {
+    padding: 8px 14px;
+    background: var(--surface);
+    border: none;
+    border-radius: 10px;
+    color: var(--accent);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .reader-body {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 24px 20px;
+    padding-bottom: calc(40px + var(--safe-bottom));
+  }
+  .reader-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 24px;
+    line-height: 1.3;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 20px;
+  }
+  .reader-content {
+    font-size: 16px;
+    line-height: 1.75;
+    color: #c8c4be;
+  }
+  .reader-content p { margin-bottom: 16px; }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 30px;
+    text-align: center;
+    gap: 12px;
+  }
+  .empty-icon { font-size: 52px; opacity: 0.4; }
+  .empty-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--text);
+    opacity: 0.7;
+  }
+  .empty-sub { font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+
+  /* ── LOADING ── */
+  .loading-spinner {
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px;
+    color: var(--text-muted);
+    font-size: 13px;
+    gap: 10px;
+  }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: calc(80px + var(--safe-bottom) + 10px);
+    left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    color: var(--text);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+    white-space: nowrap;
+    border: 1px solid var(--border);
+    z-index: 999;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── SECTION HEADER ── */
+  .section-header {
+    padding: 20px 20px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  /* ── SUGGESTED FEEDS ── */
+  .suggested-feed {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 12px;
+    margin: 0 12px 4px;
+    transition: background 0.15s;
+  }
+  .suggested-feed:active { background: var(--surface); }
+  .sug-icon { font-size: 22px; }
+  .sug-name { font-size: 14px; color: var(--text); font-weight: 500; }
+  .sug-url { font-size: 11px; color: var(--text-muted); }
+  .sug-add {
+    margin-left: auto;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: var(--surface2);
+    color: var(--accent);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* ── PULL TO REFRESH ── */
+  .ptr-indicator {
+    text-align: center;
+    padding: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    height: 0;
+    overflow: hidden;
+    transition: height 0.2s;
+  }
+  .ptr-indicator.visible { height: 44px; }
+
+  /* ── SETTINGS VIEW ── */
+  .settings-section {
+    margin: 16px 0 0;
+  }
+  .settings-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-label { font-size: 15px; color: var(--text); }
+  .settings-value { font-size: 14px; color: var(--text-muted); }
+  .toggle {
+    width: 48px; height: 28px;
+    background: var(--surface2);
+    border-radius: 14px;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 22px; height: 22px;
+    background: white;
+    border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* ── ARTICLE COUNT BADGE ── */
+  .badge {
+    background: var(--accent);
+    color: #0f0f0f;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 8px;
+    margin-left: 4px;
+  }
+
+  .divider { height: 1px; background: var(--border); }
+
+  /* ── SEARCH BAR ── */
+  .search-bar {
+    margin: 12px 20px;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    display: flex; align-items: center;
+    padding: 0 14px;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .search-bar input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 11px 0;
+  }
+  .search-bar input::placeholder { color: var(--text-muted); }
+  .search-icon { color: var(--text-muted); font-size: 16px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="status-bar"></div>
+
+  <!-- ══ FLUX VIEW (articles) ══ -->
+  <div class="view active" id="fluxView">
+    <div class="header">
+      <div class="header-top">
+        <div>
+          <div class="header-title">Flux</div>
+          <div class="header-sub" id="articleCountLabel">Chargement…</div>
+        </div>
+        <button class="icon-btn" onclick="refreshAll()" id="refreshBtn">⟳</button>
+      </div>
+    </div>
+
+    <div class="filter-tabs" id="filterTabs">
+      <button class="tab active" onclick="filterBy('all', this)">Tous</button>
+      <button class="tab" onclick="filterBy('unread', this)">Non lus</button>
+    </div>
+
+    <div class="search-bar">
+      <span class="search-icon">🔍</span>
+      <input type="text" placeholder="Rechercher…" id="searchInput" oninput="filterArticles()">
+    </div>
+
+    <div class="scroll-area" id="articleList">
+      <div class="empty-state" id="emptyArticles">
+        <div class="empty-icon">📡</div>
+        <div class="empty-title">Aucun flux ajouté</div>
+        <div class="empty-sub">Rendez-vous dans l'onglet Flux pour ajouter vos premières sources RSS.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ FEEDS VIEW ══ -->
+  <div class="view" id="feedsView">
+    <div class="header">
+      <div class="header-top">
+        <div>
+          <div class="header-title">Sources</div>
+          <div class="header-sub" id="feedCountLabel">0 flux</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scroll-area">
+      <div class="add-feed-form">
+        <label class="form-label">Entrez un site web ou une URL RSS</label>
+        <div class="smart-input-wrap">
+          <input type="text" id="feedUrlInput" placeholder="ex: lemonde.fr, youtube.com/…" autocapitalize="none" autocorrect="off" spellcheck="false"
+            onkeydown="if(event.key==='Enter') discoverFeed()">
+          <button class="smart-go-btn" id="discoverBtn" onclick="discoverFeed()">Chercher</button>
+        </div>
+      </div>
+
+      <!-- Discovery results -->
+      <div class="discovery-panel" id="discoveryPanel">
+        <div class="discovery-header" id="discoveryHeader">Flux trouvés</div>
+        <div id="discoveryResults"></div>
+      </div>
+
+      <div class="section-header">Suggestions</div>
+      <div id="suggestedFeeds"></div>
+
+      <div class="divider" style="margin:16px 0 0"></div>
+      <div class="section-header">Mes flux</div>
+      <div id="feedList">
+        <div class="empty-state" style="padding:30px">
+          <div class="empty-icon">🌐</div>
+          <div class="empty-title">Aucun flux</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SETTINGS VIEW ══ -->
+  <div class="view" id="settingsView">
+    <div class="header">
+      <div class="header-top">
+        <div>
+          <div class="header-title">Réglages</div>
+          <div class="header-sub">Personnalisation</div>
+        </div>
+      </div>
+    </div>
+    <div class="scroll-area">
+      <div class="settings-section">
+        <div class="section-header">Lecture</div>
+        <div class="settings-row">
+          <span class="settings-label">Marquer lu à l'ouverture</span>
+          <button class="toggle on" id="toggleRead" onclick="toggleSetting('markRead', this)"></button>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Afficher les images</span>
+          <button class="toggle on" id="toggleImages" onclick="toggleSetting('showImages', this)"></button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="section-header">Données</div>
+        <div class="settings-row" style="cursor:pointer" onclick="markAllRead()">
+          <span class="settings-label">Tout marquer comme lu</span>
+          <span class="settings-value">→</span>
+        </div>
+        <div class="settings-row" style="cursor:pointer" onclick="clearAll()">
+          <span class="settings-label" style="color:var(--red)">Réinitialiser tout</span>
+          <span class="settings-value">→</span>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="section-header">À propos</div>
+        <div class="settings-row">
+          <span class="settings-label">Version</span>
+          <span class="settings-value">1.0.0</span>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Articles en cache</span>
+          <span class="settings-value" id="cacheCount">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ BOTTOM NAV ══ -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" id="nav-flux" onclick="showView('flux')">
+      <span class="nav-icon">📰</span>
+      <span class="nav-label">Flux</span>
+    </button>
+    <button class="nav-item" id="nav-feeds" onclick="showView('feeds')">
+      <span class="nav-icon">📡</span>
+      <span class="nav-label">Sources</span>
+    </button>
+    <button class="nav-item" id="nav-settings" onclick="showView('settings')">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">Réglages</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ══ ARTICLE READER OVERLAY ══ -->
+<div id="readerView">
+  <div class="reader-header">
+    <button class="reader-back" onclick="closeReader()">‹</button>
+    <div class="reader-source-info">
+      <div class="reader-source-name" id="readerSource">—</div>
+      <div class="reader-date" id="readerDate">—</div>
+    </div>
+    <button class="reader-open-btn" onclick="openInBrowser()">Ouvrir ↗</button>
+  </div>
+  <div class="reader-body">
+    <div class="reader-title" id="readerTitle"></div>
+    <div class="reader-content" id="readerContent"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════
+let state = {
+  feeds: [],
+  articles: [],
+  readIds: new Set(),
+  settings: { markRead: true, showImages: true },
+  activeFilter: 'all',
+  currentArticle: null,
+};
+
+// Liste de proxies CORS publics, essayés dans l'ordre
+const CORS_PROXIES = [
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
+async function proxyFetch(targetUrl) {
+  let lastErr;
+  for (const proxyFn of CORS_PROXIES) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch(proxyFn(targetUrl), { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return await res.text();
+    } catch(e) {
+      clearTimeout(timer);
+      lastErr = e;
+      console.warn('Proxy failed:', e.message);
+    }
+  }
+  throw lastErr || new Error('Tous les proxies ont échoué');
+}
+
+const SUGGESTED = [
+  { name: 'Le Monde', url: 'https://www.lemonde.fr/rss/une.xml', icon: '🗞️', color: '#2e6da4' },
+  { name: 'France Info', url: 'https://www.francetvinfo.fr/titres.rss', icon: '📻', color: '#e8403c' },
+  { name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml', icon: '💻', color: '#fa4c19' },
+  { name: 'Hacker News', url: 'https://hnrss.org/frontpage', icon: '🔶', color: '#ff6600' },
+  { name: 'NASA', url: 'https://www.nasa.gov/rss/dyn/breaking_news.rss', icon: '🚀', color: '#1a3a6b' },
+  { name: 'TF1 Info', url: 'https://www.tf1info.fr/rss-feed/', icon: '📺', color: '#003f8a' },
+];
+
+// ══════════════════════════════════════════════
+//  PERSISTENCE
+// ══════════════════════════════════════════════
+function save() {
+  localStorage.setItem('rss_feeds', JSON.stringify(state.feeds));
+  localStorage.setItem('rss_articles', JSON.stringify(state.articles.slice(0, 500)));
+  localStorage.setItem('rss_read', JSON.stringify([...state.readIds]));
+  localStorage.setItem('rss_settings', JSON.stringify(state.settings));
+}
+
+function load() {
+  try {
+    state.feeds = JSON.parse(localStorage.getItem('rss_feeds') || '[]');
+    state.articles = JSON.parse(localStorage.getItem('rss_articles') || '[]');
+    state.readIds = new Set(JSON.parse(localStorage.getItem('rss_read') || '[]'));
+    state.settings = { markRead: true, showImages: true, ...JSON.parse(localStorage.getItem('rss_settings') || '{}') };
+  } catch(e) {}
+}
+
+// ══════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(name + 'View').classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'feeds') renderFeeds();
+  if (name === 'settings') {
+    document.getElementById('cacheCount').textContent = state.articles.length + ' articles';
+    document.getElementById('toggleRead').classList.toggle('on', state.settings.markRead);
+    document.getElementById('toggleImages').classList.toggle('on', state.settings.showImages);
+  }
+}
+
+// ══════════════════════════════════════════════
+//  FEEDS
+// ══════════════════════════════════════════════
+const FEED_COLORS = ['#e8d5b0','#87ceeb','#98d8a0','#f4a460','#dda0dd','#87cefa','#f0e68c','#ffa07a'];
+
+// ── COMMON RSS PATH PATTERNS to probe (in parallel) ──
+const RSS_SUFFIXES = [
+  '/feed', '/feed/', '/feed.xml', '/feed.rss', '/feed.atom',
+  '/feed/free', '/feed/atom', '/feed/rss', '/feed/rss2',
+  '/rss', '/rss/', '/rss.xml', '/rss2.xml',
+  '/atom', '/atom.xml', '/atom/',
+  '/feeds/posts/default', '/feeds/all.atom.xml',
+  '/index.xml', '/sitemap.xml',
+  '/blog/feed', '/blog/rss', '/blog/rss.xml', '/blog/feed.xml',
+  '/news/feed', '/news/rss', '/articles/feed',
+  '/en/rss.xml', '/fr/feed',
+  '/?feed=rss2', '/?feed=rss', '/?feed=atom',
+  '/wp-json/feed', '/api/feed',
+];
+
+function isLikelyFeedUrl(url) {
+  return /\.(xml|rss|atom)$/i.test(url) ||
+    /\/(feed|rss|atom)(\/|$|\?)/i.test(url) ||
+    /\?feed=/i.test(url) ||
+    /feeds\./i.test(new URL(url).hostname);
+}
+
+function isFeedContent(text) {
+  // Quick check if a response body looks like XML/RSS/Atom
+  const t = text.trimStart();
+  return t.startsWith('<?xml') || t.startsWith('<rss') || t.startsWith('<feed') || t.startsWith('<atom');
+}
+
+// Detect platform shortcuts
+function platformFeedUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl.startsWith('http') ? rawUrl : 'https://' + rawUrl);
+    const host = u.hostname.replace('www.', '');
+    const path = u.pathname;
+
+    // YouTube channel/user/playlist
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      const chMatch = path.match(/\/@([^/]+)/);
+      const idMatch = path.match(/\/channel\/([^/]+)/);
+      const userMatch = path.match(/\/user\/([^/]+)/);
+      const plMatch = u.searchParams.get('list');
+      if (plMatch) return [`https://www.youtube.com/feeds/videos.xml?playlist_id=${plMatch}`];
+      if (chMatch) return [`https://www.youtube.com/feeds/videos.xml?user=${chMatch[1]}`];
+      if (idMatch) return [`https://www.youtube.com/feeds/videos.xml?channel_id=${idMatch[1]}`];
+      if (userMatch) return [`https://www.youtube.com/feeds/videos.xml?user=${userMatch[1]}`];
+    }
+    // Reddit
+    if (host === 'reddit.com') {
+      return [rawUrl.replace(/\/?$/, '') + '.rss'];
+    }
+    // GitHub releases
+    if (host === 'github.com') {
+      const parts = path.split('/').filter(Boolean);
+      if (parts.length >= 2) return [`https://github.com/${parts[0]}/${parts[1]}/releases.atom`];
+    }
+  } catch(e) {}
+  return null;
+}
+
+async function discoverFeed() {
+  let raw = document.getElementById('feedUrlInput').value.trim();
+  if (!raw) { showToast('Entrez une adresse'); return; }
+  if (!raw.includes('://')) raw = 'https://' + raw;
+  // Normalize trailing slash for root URLs
+  try { const u = new URL(raw); if (u.pathname === '') u.pathname = '/'; raw = u.href; } catch(e) {}
+
+  const btn = document.getElementById('discoverBtn');
+  btn.disabled = true;
+  btn.textContent = '…';
+
+  const panel = document.getElementById('discoveryPanel');
+  const resultsEl = document.getElementById('discoveryResults');
+  panel.classList.add('visible');
+  resultsEl.innerHTML = `<div class="discovery-status"><div class="spinner"></div> Recherche en cours…</div>`;
+  document.getElementById('discoveryHeader').textContent = 'Recherche…';
+
+  try {
+    const found = [];
+
+    // 1. Platform shortcuts (YouTube, Reddit, GitHub)
+    const shortcuts = platformFeedUrl(raw);
+    if (shortcuts) {
+      for (const u of shortcuts) {
+        try {
+          const feed = await fetchFeed(u);
+          if (feed.items?.length) found.push({ url: u, title: feed.title, count: feed.items.length });
+        } catch(e) {}
+      }
+    }
+
+    // 2. If the URL itself looks like a feed, try it directly
+    if (!found.length && isLikelyFeedUrl(raw)) {
+      try {
+        const feed = await fetchFeed(raw);
+        if (feed.items?.length) found.push({ url: raw, title: feed.title, count: feed.items.length });
+      } catch(e) {}
+    }
+
+    // 3. Fetch the page HTML raw (via proxy to get actual <head>) and scan for feed links
+    if (!found.length) {
+      try {
+        const pageText = await fetchRaw(raw);
+        // a) <link rel="alternate"> tags in <head>
+        const discovered = extractFeedLinksFromHtml(pageText, raw);
+        // b) Also extract href URLs that look like feeds from anywhere in the page body
+        const bodyFeedUrls = extractFeedUrlsFromBody(pageText, raw);
+        const allCandidates = [...discovered, ...bodyFeedUrls];
+        // Deduplicate by URL
+        const seen = new Set();
+        const unique = allCandidates.filter(c => { if (seen.has(c.url)) return false; seen.add(c.url); return true; });
+        for (const link of unique.slice(0, 8)) {
+          try {
+            const feed = await fetchFeed(link.url);
+            if (feed.items?.length) found.push({ url: link.url, title: link.title || feed.title, count: feed.items.length });
+          } catch(e) {}
+        }
+      } catch(e) {}
+    }
+
+    // 4. Probe all common RSS suffixes in parallel on the domain
+    if (!found.length) {
+      const origin = new URL(raw).origin;
+      const probes = RSS_SUFFIXES.map(s => origin + s);
+      const results = await Promise.allSettled(probes.map(async u => {
+        // Fetch raw first to check content type before full parse
+        const text = await fetchRaw(u);
+        if (!isFeedContent(text)) throw new Error('not a feed');
+        const feed = parseFeed(text, u);
+        if (feed.items?.length) return { url: u, title: feed.title, count: feed.items.length };
+        throw new Error('empty');
+      }));
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value) {
+          found.push(r.value);
+          // Don't break — collect all valid ones
+        }
+      }
+    }
+
+    if (!found.length) {
+      resultsEl.innerHTML = `<div class="discovery-status">😕 Aucun flux RSS trouvé pour ce site.</div>`;
+      document.getElementById('discoveryHeader').textContent = 'Aucun résultat';
+    } else {
+      document.getElementById('discoveryHeader').textContent = found.length + ' flux trouvé' + (found.length > 1 ? 's' : '');
+      resultsEl.innerHTML = found.map((f, i) => `
+        <div class="discovery-item">
+          <span class="disc-icon">📡</span>
+          <div class="disc-info">
+            <div class="disc-name">${f.title || new URL(f.url).hostname}</div>
+            <div class="disc-url">${f.url}</div>
+          </div>
+          <button class="disc-add" onclick="confirmAddFeed('${encodeURIComponent(f.url)}','${encodeURIComponent(f.title||'')}')">＋ Ajouter</button>
+        </div>
+      `).join('');
+    }
+  } catch(e) {
+    resultsEl.innerHTML = `<div class="discovery-status">⚠️ Erreur lors de la recherche.</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Chercher';
+  }
+}
+
+function extractFeedLinksFromHtml(html, baseUrl) {
+  const results = [];
+  // Match <link> tags with RSS/Atom type
+  const linkRe = /<link([^>]+)>/gi;
+  let m;
+  while ((m = linkRe.exec(html)) !== null) {
+    const attrs = m[1];
+    const typeM = attrs.match(/type=["']([^"']+)["']/i);
+    const hrefM = attrs.match(/href=["']([^"']+)["']/i);
+    const titleM = attrs.match(/title=["']([^"']+)["']/i);
+    if (typeM && hrefM && /rss|atom|xml/i.test(typeM[1])) {
+      let href = hrefM[1];
+      if (href.startsWith('//')) href = 'https:' + href;
+      else if (href.startsWith('/')) href = new URL(baseUrl).origin + href;
+      else if (!href.startsWith('http')) href = new URL(baseUrl).origin + '/' + href;
+      results.push({ url: href, title: titleM ? titleM[1] : '' });
+    }
+  }
+  return results;
+}
+
+// Scan body text for href values that look like feed URLs
+function extractFeedUrlsFromBody(html, baseUrl) {
+  const results = [];
+  const origin = new URL(baseUrl).origin;
+  // Match any href="..." that looks like a feed path
+  const hrefRe = /href=["']([^"']+)["']/gi;
+  let m;
+  while ((m = hrefRe.exec(html)) !== null) {
+    let href = m[1];
+    if (!href || href.startsWith('#') || href.startsWith('mailto:')) continue;
+    if (href.startsWith('//')) href = 'https:' + href;
+    else if (href.startsWith('/')) href = origin + href;
+    else if (!href.startsWith('http')) continue;
+    // Only keep if it looks like a feed URL
+    try {
+      const u = new URL(href);
+      if (u.origin !== origin) continue; // same-site only
+      if (isLikelyFeedUrl(href)) results.push({ url: href, title: '' });
+    } catch(e) {}
+  }
+  return results;
+}
+
+async function fetchRaw(url) {
+  return await proxyFetch(url);
+}
+
+async function confirmAddFeed(encodedUrl, encodedName) {
+  const url = decodeURIComponent(encodedUrl);
+  const name = decodeURIComponent(encodedName);
+  await addFeed(url, name);
+}
+
+async function addFeed(url, name) {
+  if (!url) { showToast('Entrez une adresse'); return; }
+  if (!url.startsWith('http')) url = 'https://' + url;
+  if (state.feeds.find(f => f.url === url)) { showToast('Ce flux est déjà ajouté'); return; }
+
+  showToast('Ajout en cours…');
+  try {
+    const feed = await fetchFeed(url);
+    const colorIdx = state.feeds.length % FEED_COLORS.length;
+    const newFeed = {
+      id: Date.now().toString(),
+      url,
+      name: name || feed.title || new URL(url).hostname,
+      color: FEED_COLORS[colorIdx],
+    };
+    state.feeds.push(newFeed);
+    const newArticles = (feed.items || []).map(item => ({
+      ...item,
+      feedId: newFeed.id,
+      feedName: newFeed.name,
+      feedColor: newFeed.color,
+      id: item.link || (newFeed.id + item.title),
+    }));
+    state.articles = mergeArticles(state.articles, newArticles);
+    save();
+    document.getElementById('feedUrlInput').value = '';
+    document.getElementById('discoveryPanel').classList.remove('visible');
+    renderFeeds();
+    renderArticles();
+    updateFilterTabs();
+    showToast('✓ Flux ajouté : ' + newFeed.name);
+  } catch(e) {
+    showToast('Impossible de charger ce flux');
+    console.error(e);
+  }
+}
+
+async function fetchFeed(url) {
+  const text = await proxyFetch(url);
+  return parseFeed(text, url);
+}
+
+function parseFeed(text, url) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, 'application/xml');
+  const isAtom = !!doc.querySelector('feed');
+
+  if (isAtom) {
+    const title = doc.querySelector('feed > title')?.textContent || url;
+    const items = [...doc.querySelectorAll('entry')].map(e => ({
+      title: e.querySelector('title')?.textContent?.trim() || '(Sans titre)',
+      link: e.querySelector('link')?.getAttribute('href') || '',
+      description: e.querySelector('summary, content')?.textContent?.trim() || '',
+      date: e.querySelector('updated, published')?.textContent || '',
+      image: e.querySelector('thumbnail, enclosure')?.getAttribute('url') || extractImage(e.querySelector('summary, content')?.textContent || ''),
+    }));
+    return { title, items };
+  } else {
+    const title = doc.querySelector('channel > title')?.textContent || url;
+    const items = [...doc.querySelectorAll('item')].map(e => ({
+      title: e.querySelector('title')?.textContent?.trim() || '(Sans titre)',
+      link: e.querySelector('link')?.textContent?.trim() || '',
+      description: e.querySelector('description')?.textContent?.trim() || '',
+      date: e.querySelector('pubDate')?.textContent || '',
+      image: e.querySelector('enclosure[type^="image"]')?.getAttribute('url') || extractImage(e.querySelector('description')?.textContent || ''),
+    }));
+    return { title, items };
+  }
+}
+
+function extractImage(html) {
+  const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+  return m ? m[1] : null;
+}
+
+function mergeArticles(existing, incoming) {
+  const existingIds = new Set(existing.map(a => a.id));
+  const fresh = incoming.filter(a => !existingIds.has(a.id));
+  return [...fresh, ...existing].sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+function removeFeed(id) {
+  if (!confirm('Supprimer ce flux et ses articles ?')) return;
+  state.feeds = state.feeds.filter(f => f.id !== id);
+  state.articles = state.articles.filter(a => a.feedId !== id);
+  save();
+  renderFeeds();
+  renderArticles();
+  updateFilterTabs();
+  showToast('Flux supprimé');
+}
+
+async function refreshAll() {
+  if (!state.feeds.length) { showToast('Ajoutez d\'abord des flux'); return; }
+  const btn = document.getElementById('refreshBtn');
+  btn.style.animation = 'spin 0.8s linear infinite';
+  showToast('Actualisation…');
+  try {
+    await Promise.allSettled(state.feeds.map(async feed => {
+      try {
+        const data = await fetchFeed(feed.url);
+        const newArticles = (data.items || []).map(item => ({
+          ...item,
+          feedId: feed.id,
+          feedName: feed.name,
+          feedColor: feed.color,
+          id: item.link || (feed.id + item.title),
+        }));
+        state.articles = mergeArticles(state.articles, newArticles);
+      } catch(e) {}
+    }));
+    save();
+    renderArticles();
+    showToast('✓ Actualisé');
+  } finally {
+    btn.style.animation = '';
+  }
+}
+
+// ══════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════
+function renderFeeds() {
+  // Suggested
+  const sugEl = document.getElementById('suggestedFeeds');
+  sugEl.innerHTML = SUGGESTED.map(s => `
+    <div class="suggested-feed">
+      <span class="sug-icon">${s.icon}</span>
+      <div>
+        <div class="sug-name">${s.name}</div>
+        <div class="sug-url">${new URL(s.url).hostname}</div>
+      </div>
+      <button class="sug-add" onclick="addFeed('${s.url}','${s.name}')">＋</button>
+    </div>
+  `).join('');
+
+  // Feed list
+  const el = document.getElementById('feedList');
+  if (!state.feeds.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:30px"><div class="empty-icon">🌐</div><div class="empty-title">Aucun flux</div></div>';
+    document.getElementById('feedCountLabel').textContent = '0 flux';
+    return;
+  }
+  document.getElementById('feedCountLabel').textContent = state.feeds.length + ' flux';
+  el.innerHTML = state.feeds.map(f => {
+    const count = state.articles.filter(a => a.feedId === f.id && !state.readIds.has(a.id)).length;
+    return `<div class="feed-item">
+      <div class="feed-icon" style="background:${f.color}22">
+        <span style="font-size:20px">📡</span>
+      </div>
+      <div class="feed-info">
+        <div class="feed-name">${f.name}</div>
+        <div class="feed-url">${f.url}</div>
+      </div>
+      ${count > 0 ? `<div class="feed-count">${count}</div>` : ''}
+      <button class="feed-del" onclick="removeFeed('${f.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function getFilteredArticles() {
+  const q = document.getElementById('searchInput')?.value.toLowerCase() || '';
+  return state.articles.filter(a => {
+    if (state.activeFilter === 'unread' && state.readIds.has(a.id)) return false;
+    const feedFilter = state.activeFilter;
+    if (feedFilter !== 'all' && feedFilter !== 'unread' && a.feedId !== feedFilter) return false;
+    if (q && !a.title.toLowerCase().includes(q) && !a.description.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function filterArticles() { renderArticles(); }
+
+function renderArticles() {
+  const el = document.getElementById('articleList');
+  const articles = getFilteredArticles();
+
+  document.getElementById('articleCountLabel').textContent =
+    articles.length + ' article' + (articles.length > 1 ? 's' : '');
+
+  if (!articles.length) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">${state.feeds.length ? '🔍' : '📡'}</div>
+      <div class="empty-title">${state.feeds.length ? 'Aucun résultat' : 'Aucun flux ajouté'}</div>
+      <div class="empty-sub">${state.feeds.length ? 'Essayez un autre filtre ou terme de recherche.' : 'Allez dans Sources pour ajouter vos premiers flux RSS.'}</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = articles.map((a, i) => {
+    const isRead = state.readIds.has(a.id);
+    const date = a.date ? formatDate(a.date) : '';
+    const img = state.settings.showImages && a.image ? `<img class="card-img" src="${a.image}" loading="lazy" onerror="this.style.display='none'">` : '';
+    const summary = stripHtml(a.description).slice(0, 120);
+    return `<div class="article-card ${isRead ? 'read' : ''}" onclick="openArticle(${i})">
+      ${!isRead ? '<div class="unread-dot"></div>' : ''}
+      <div class="card-source">
+        <div class="source-dot" style="background:${a.feedColor}"></div>
+        <span class="source-name">${a.feedName}</span>
+        <span class="card-date">${date}</span>
+      </div>
+      ${img}
+      <div class="card-title">${a.title}</div>
+      ${summary ? `<div class="card-summary">${summary}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function updateFilterTabs() {
+  const tabs = document.getElementById('filterTabs');
+  const feedTabs = state.feeds.map(f => {
+    const count = state.articles.filter(a => a.feedId === f.id && !state.readIds.has(a.id)).length;
+    return `<button class="tab ${state.activeFilter === f.id ? 'active' : ''}" onclick="filterBy('${f.id}', this)">${f.name}${count > 0 ? `<span class="badge">${count}</span>` : ''}</button>`;
+  }).join('');
+  tabs.innerHTML = `
+    <button class="tab ${state.activeFilter === 'all' ? 'active' : ''}" onclick="filterBy('all',this)">Tous</button>
+    <button class="tab ${state.activeFilter === 'unread' ? 'active' : ''}" onclick="filterBy('unread',this)">Non lus</button>
+    ${feedTabs}
+  `;
+}
+
+function filterBy(filter, btn) {
+  state.activeFilter = filter;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderArticles();
+}
+
+// ══════════════════════════════════════════════
+//  READER
+// ══════════════════════════════════════════════
+function openArticle(idx) {
+  const articles = getFilteredArticles();
+  const a = articles[idx];
+  if (!a) return;
+  state.currentArticle = a;
+
+  if (state.settings.markRead) {
+    state.readIds.add(a.id);
+    save();
+  }
+
+  document.getElementById('readerSource').textContent = a.feedName;
+  document.getElementById('readerDate').textContent = a.date ? formatDate(a.date, true) : '';
+  document.getElementById('readerTitle').textContent = a.title;
+
+  const content = a.description
+    ? `<p>${stripHtml(a.description).replace(/\n+/g, '</p><p>')}</p>`
+    : '<p style="color:var(--text-muted)">Aucun contenu disponible. Ouvrez l\'article dans le navigateur.</p>';
+  document.getElementById('readerContent').innerHTML = content;
+
+  document.getElementById('readerView').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeReader() {
+  document.getElementById('readerView').classList.remove('open');
+  document.body.style.overflow = '';
+  renderArticles();
+  updateFilterTabs();
+}
+
+function openInBrowser() {
+  if (state.currentArticle?.link) window.open(state.currentArticle.link, '_blank');
+}
+
+// ══════════════════════════════════════════════
+//  SETTINGS
+// ══════════════════════════════════════════════
+function toggleSetting(key, btn) {
+  state.settings[key] = !state.settings[key];
+  btn.classList.toggle('on', state.settings[key]);
+  save();
+}
+
+function markAllRead() {
+  state.articles.forEach(a => state.readIds.add(a.id));
+  save();
+  renderArticles();
+  updateFilterTabs();
+  showToast('Tous les articles marqués lus');
+}
+
+function clearAll() {
+  if (!confirm('Tout réinitialiser ? Vos flux et articles seront effacés.')) return;
+  state.feeds = [];
+  state.articles = [];
+  state.readIds = new Set();
+  save();
+  renderFeeds();
+  renderArticles();
+  updateFilterTabs();
+  showToast('Réinitialisé');
+}
+
+// ══════════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════════
+function stripHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || '';
+}
+
+function formatDate(dateStr, long = false) {
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = now - d;
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (mins < 1) return 'À l\'instant';
+    if (mins < 60) return mins + ' min';
+    if (hours < 24) return hours + 'h';
+    if (days < 7) return days + 'j';
+    return d.toLocaleDateString('fr-FR', long ? { day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short' });
+  } catch(e) { return dateStr; }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ══════════════════════════════════════════════
+//  SWIPE TO CLOSE READER
+// ══════════════════════════════════════════════
+let touchStartY = 0;
+const reader = document.getElementById('readerView');
+reader.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+reader.addEventListener('touchend', e => {
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (dy > 100 && e.changedTouches[0].clientY < 200) closeReader();
+}, { passive: true });
+
+// ══════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════
+load();
+renderArticles();
+updateFilterTabs();
+
+// Auto refresh on start
+if (state.feeds.length) {
+  setTimeout(refreshAll, 800);
+}
+</script>
+</body>
+</html>
