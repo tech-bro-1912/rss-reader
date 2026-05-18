@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>Flux — Lecteur RSS v2.0.0</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     SPLASH SCREEN
+══════════════════════════════════════════ -->
+<div id="splashScreen">
+  <div class="splash-title">
+    Flux
+    <svg id="splashRss" width="36" height="36" viewBox="0 0 24 24" fill="none"
+         stroke="#6366f1" stroke-width="2.2" stroke-linecap="round">
+      <circle id="splash-dot" cx="4" cy="20" r="2" fill="#6366f1" stroke="none"/>
+      <path id="splash-arc1" d="M4 14 a8 8 0 0 1 6 6"/>
+      <path id="splash-arc2" d="M4 9  a13 13 0 0 1 11 11"/>
+      <path id="splash-arc3" d="M4 4  a18 18 0 0 1 16 16"/>
+    </svg>
+  </div>
+  <div class="splash-version">v2.0.0 · Lecteur RSS & Podcasts</div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     HEADER FIXE UNIQUE
+     Contenu switché par JS selon la vue active
+══════════════════════════════════════════ -->
+<div id="fixedHeader">
+
+  <!-- Flux -->
+  <div id="hdr-flux" class="header">
+    <div class="header-top">
+      <div>
+        <div style="display:flex;align-items:center;gap:9px;">
+          <div class="header-title">Flux</div>
+          <svg id="rssAnim" width="22" height="22" viewBox="0 0 24 24" fill="none"
+               stroke="#6366f1" stroke-width="2.2" stroke-linecap="round"
+               style="flex-shrink:0;cursor:pointer;overflow:visible;"
+               onclick="handleRssIconClick()" title="Actualiser">
+            <circle id="rss-dot" cx="4" cy="20" r="2" fill="#6366f1" stroke="none"/>
+            <path id="rss-arc1" d="M4 14 a8 8 0 0 1 6 6"/>
+            <path id="rss-arc2" d="M4 9  a13 13 0 0 1 11 11"/>
+            <path id="rss-arc3" d="M4 4  a18 18 0 0 1 16 16"/>
+          </svg>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:2px;">
+          <div class="header-sub" style="color:var(--accent);opacity:0.6;font-size:10px;letter-spacing:0.5px;">v2.0.0</div>
+          <div style="width:3px;height:3px;border-radius:50%;background:var(--text-muted);opacity:0.4;"></div>
+          <div class="header-sub" id="articleCountLabel">Chargement…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recherche -->
+  <div id="hdr-search" class="header" style="display:none;padding-bottom:0;">
+    <div class="header-top">
+      <div class="header-title">
+        <i class="ti ti-search" style="font-size:22px;vertical-align:-3px;margin-right:8px;color:var(--accent);"></i>Recherche
+      </div>
+    </div>
+    <div id="searchSegmented" style="display:flex;gap:0;background:var(--surface2);border-radius:10px;padding:3px;margin:10px 0 14px;">
+      <button class="search-seg-btn active" id="seg-flux"     onclick="setSearchMode('flux')">📰 Flux</button>
+      <button class="search-seg-btn"        id="seg-podcast"  onclick="setSearchMode('podcast')">🎙 Podcasts</button>
+      <button class="search-seg-btn"        id="seg-academic" onclick="setSearchMode('academic')">🎓 Science</button>
+    </div>
+  </div>
+
+  <!-- Podcasts -->
+  <div id="hdr-podcast" class="header" style="display:none;">
+    <div class="header-top">
+      <div>
+        <div class="header-title">
+          <i class="ti ti-microphone" style="font-size:22px;vertical-align:-3px;margin-right:8px;color:var(--accent);"></i>Podcasts
+        </div>
+        <div class="header-sub" id="podcastCountLabel">0 podcast</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Explorer -->
+  <div id="hdr-feeds" class="header" style="display:none;">
+    <div class="header-top">
+      <div>
+        <div class="header-title">
+          <i class="ti ti-telescope" style="font-size:22px;vertical-align:-3px;margin-right:8px;color:var(--accent);"></i>Explorer
+        </div>
+        <div class="header-sub" id="feedCountLabel">0 flux</div>
+      </div>
+      <button class="settings-top-btn" onclick="openSettings()" title="Réglages">
+        <i class="ti ti-settings"></i>
+      </button>
+    </div>
+  </div>
+
+</div><!-- /#fixedHeader -->
+
+
+<!-- ══════════════════════════════════════════
+     APPLICATION
+══════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── SWIPE CONTAINER ── -->
+  <div id="swipeContainer">
+    <div id="swipeTrack">
+
+      <!-- ─────────────────────────────────────
+           VUE 1 : FLUX
+      ───────────────────────────────────── -->
+      <div class="swipe-view view active" id="fluxView">
+
+        <!-- Onglets filtre -->
+        <div class="filter-tabs" id="filterTabs">
+          <button class="tab" id="tabFluxList" onclick="showFluxList()">
+            <i class="ti ti-layout-list" style="font-size:12px;vertical-align:-1px;margin-right:3px;"></i>Flux
+          </button>
+          <button class="tab active" onclick="filterBy('all', this)">Tous</button>
+          <button class="tab" onclick="filterBy('unread', this)">Non lus</button>
+          <button class="tab" onclick="filterBy('later', this)">
+            <i class="ti ti-bookmark" style="font-size:12px;vertical-align:-1px;margin-right:3px;"></i>À lire
+          </button>
+        </div>
+
+        <!-- Barre de recherche inline -->
+        <div class="search-bar">
+          <i class="ti ti-search search-icon"></i>
+          <input type="text" placeholder="Rechercher…" id="searchInput"
+                 oninput="filterArticles()" autocorrect="off" autocapitalize="none">
+          <button id="searchAdvBtn" onclick="toggleSearchAdv()"
+                  style="background:none;border:none;color:var(--text-muted);font-size:15px;cursor:pointer;padding:4px;display:flex;align-items:center;font-family:inherit;"
+                  title="Filtres">
+            <i class="ti ti-sliders"></i>
+          </button>
+        </div>
+
+        <!-- Filtres avancés inline -->
+        <div class="search-advanced" id="searchAdv">
+          <div class="search-opts">
+            <span style="font-size:11px;color:var(--text-muted);padding:5px 4px 5px 0;align-self:center;">Dans :</span>
+            <button class="search-opt on" id="opt-title" onclick="toggleSearchOpt('title')">Titres</button>
+            <button class="search-opt on" id="opt-body"  onclick="toggleSearchOpt('body')">Contenu</button>
+          </div>
+          <div class="search-opts">
+            <span style="font-size:11px;color:var(--text-muted);padding:5px 4px 5px 0;align-self:center;">Période :</span>
+            <button class="search-opt on" id="opt-all"     onclick="setPeriod('all')">Tout</button>
+            <button class="search-opt"    id="opt-day"     onclick="setPeriod('day')">24h</button>
+            <button class="search-opt"    id="opt-week"    onclick="setPeriod('week')">Semaine</button>
+            <button class="search-opt"    id="opt-month"   onclick="setPeriod('month')">Mois</button>
+            <button class="search-opt"    id="opt-quarter" onclick="setPeriod('quarter')">Trimestre</button>
+            <button class="search-opt"    id="opt-year"    onclick="setPeriod('year')">Année</button>
+          </div>
+        </div>
+
+        <!-- Sub-header flux individuel -->
+        <div class="sub-header" id="feedSubHeader" style="display:none;">
+          <button class="sub-back" onclick="backToAll()"><i class="ti ti-chevron-left"></i></button>
+          <div style="flex:1;min-width:0;">
+            <div class="sub-title" id="feedSubTitle"></div>
+            <div class="sub-meta"  id="feedSubMeta"></div>
+          </div>
+        </div>
+
+        <!-- Panel liste flux -->
+        <div class="flux-panel" id="fluxPanel"></div>
+
+        <!-- Liste articles -->
+        <div class="scroll-area" id="articleList">
+          <div class="empty-state" id="emptyArticles">
+            <i class="ti ti-rss empty-icon"></i>
+            <div class="empty-title">Aucun flux ajouté</div>
+            <div class="empty-sub">Ajoutez des sources dans l'onglet Explorer.</div>
+          </div>
+        </div>
+
+      </div><!-- /#fluxView -->
+
+
+      <!-- ─────────────────────────────────────
+           VUE 2 : RECHERCHE
+      ───────────────────────────────────── -->
+      <div class="swipe-view view" id="searchView">
+
+        <!-- Barre de recherche + bouton avancé -->
+        <div style="display:flex;gap:8px;align-items:center;padding:0 16px 8px;flex-shrink:0;">
+          <div class="search-field">
+            <i class="ti ti-search" style="font-size:18px;color:var(--text-muted);"></i>
+            <input type="text" id="searchViewInput" placeholder="Mots-clés…"
+                   oninput="runSearch()" autocorrect="off" autocapitalize="none" spellcheck="false">
+            <button class="clear-btn" onclick="clearSearch()" id="searchClearBtn" style="display:none;">
+              <i class="ti ti-x"></i>
+            </button>
+          </div>
+          <button id="searchAdvancedBtn" onclick="toggleSearchAdvanced()"
+                  style="width:40px;height:40px;border-radius:12px;border:none;background:var(--surface);color:var(--text-muted);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;">
+            <i class="ti ti-adjustments"></i>
+          </button>
+        </div>
+
+        <!-- Panneau filtres avancés -->
+        <div id="searchAdvancedPanel" style="display:none;padding:0 16px 8px;pointer-events:none;flex-shrink:0;">
+
+          <!-- Flux : sélecteur -->
+          <div id="adv-flux-opts">
+            <div class="flux-selector-wrap">
+              <button class="flux-selector-btn" id="fluxSelectorBtn" onclick="toggleFluxSelector()">
+                <span id="fluxSelectorLabel">Tous les flux</span>
+                <i class="ti ti-chevron-down"></i>
+              </button>
+              <div class="flux-selector-dropdown" id="fluxSelectorDropdown">
+                <div class="flux-selector-header">
+                  <span id="fluxSelectorCount"></span>
+                  <button class="flux-selector-toggle-all" onclick="toggleAllFlux()">Tout sélectionner</button>
+                </div>
+                <div id="fluxSelectorList"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Podcasts : sélecteur -->
+          <div id="adv-podcast-opts" style="display:none;">
+            <div class="flux-selector-wrap">
+              <button class="flux-selector-btn" id="podSelectorBtn" onclick="togglePodSelector()">
+                <span id="podSelectorLabel">Tous les podcasts</span>
+                <i class="ti ti-chevron-down"></i>
+              </button>
+              <div class="flux-selector-dropdown" id="podSelectorDropdown">
+                <div class="flux-selector-header">
+                  <span id="podSelectorCount"></span>
+                  <button class="flux-selector-toggle-all" onclick="toggleAllPods()">Tout sélectionner</button>
+                </div>
+                <div id="podSelectorList"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Science : filtres OpenAlex -->
+          <div id="adv-academic-opts" style="display:none;flex-direction:column;gap:8px;">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+              <span style="font-size:11px;color:var(--text-muted);min-width:50px;">Accès</span>
+              <button class="search-pill" id="adv-oa" onclick="toggleAdvOA(this)">🔓 Open Access</button>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+              <span style="font-size:11px;color:var(--text-muted);min-width:50px;">Période</span>
+              <button class="search-pill on" id="adv-recent-all" onclick="setAdvPeriod('all',this)">Tout</button>
+              <button class="search-pill"    id="adv-recent-5"   onclick="setAdvPeriod('5',this)">5 ans</button>
+              <button class="search-pill"    id="adv-recent-10"  onclick="setAdvPeriod('10',this)">10 ans</button>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+              <span style="font-size:11px;color:var(--text-muted);min-width:50px;">Langue</span>
+              <button class="search-pill on" id="adv-lang-all" onclick="toggleAdvLang('all')">Toutes</button>
+              <button class="search-pill"    id="adv-lang-fr"  onclick="toggleAdvLang('fr')">Français 🇫🇷</button>
+              <button class="search-pill"    id="adv-lang-en"  onclick="toggleAdvLang('en')">English 🇬🇧</button>
+            </div>
+          </div>
+
+        </div><!-- /#searchAdvancedPanel -->
+
+        <!-- Info contexte + compteur -->
+        <div id="searchContextInfo" style="padding:0 16px 4px;font-size:11px;color:var(--text-muted);flex-shrink:0;"></div>
+        <div class="search-count" id="searchCount" style="display:none;"></div>
+
+        <!-- Résultats -->
+        <div class="search-results-area" id="searchResults">
+          <div class="search-empty">
+            <i class="ti ti-search"></i>
+            <div class="search-empty-title">Rechercher</div>
+            <div id="searchEmptySub" class="search-empty-sub">Tapez des mots-clés pour rechercher dans vos flux</div>
+          </div>
+        </div>
+
+      </div><!-- /#searchView -->
+
+
+      <!-- ─────────────────────────────────────
+           VUE 3 : PODCASTS
+      ───────────────────────────────────── -->
+      <div class="swipe-view view" id="podcastView">
+
+        <!-- Onglets Mes podcasts / Derniers épisodes -->
+        <div style="padding:0 16px 10px;flex-shrink:0;">
+          <div class="pod-section-tabs" id="podTabs">
+            <button class="pod-section-tab active" id="pod-tab-list"
+                    onclick="switchPodTab('list')">Mes podcasts</button>
+            <button class="pod-section-tab" id="pod-tab-episodes"
+                    onclick="switchPodTab('episodes')">Derniers épisodes</button>
+          </div>
+        </div>
+
+        <!-- Liste podcasts -->
+        <div class="scroll-area" id="podcastList" style="padding-bottom:calc(80px + var(--safe-bottom));">
+          <div class="empty-state" id="podcastEmpty">
+            <i class="ti ti-microphone empty-icon"></i>
+            <div class="empty-title">Aucun podcast</div>
+            <div class="empty-sub">Ajoutez des podcasts depuis l'onglet Explorer.</div>
+          </div>
+        </div>
+
+        <!-- Liste épisodes -->
+        <div class="scroll-area" id="episodeList"
+             style="display:none;padding-bottom:calc(80px + var(--safe-bottom));"></div>
+
+      </div><!-- /#podcastView -->
+
+
+      <!-- ─────────────────────────────────────
+           VUE 4 : EXPLORER
+      ───────────────────────────────────── -->
+      <div class="swipe-view view" id="feedsView">
+        <div class="scroll-area">
+
+          <!-- Onglets Flux RSS / Podcasts -->
+          <div style="padding:0 16px 12px;">
+            <div class="pod-section-tabs">
+              <button class="pod-section-tab active" id="src-tab-flux"
+                      onclick="switchSrcTab('flux')">Flux RSS</button>
+              <button class="pod-section-tab" id="src-tab-pod"
+                      onclick="switchSrcTab('podcast')">Podcasts</button>
+            </div>
+          </div>
+
+          <!-- ── Panel Flux RSS ── -->
+          <div id="srcFluxPanel">
+
+            <!-- Explorer / URL -->
+            <div style="padding:0 16px 12px;">
+              <div class="pod-section-tabs">
+                <button class="pod-section-tab active" id="rss-src-explore"
+                        onclick="switchRssMode('explore')">🔍 Explorer</button>
+                <button class="pod-section-tab" id="rss-src-url"
+                        onclick="switchRssMode('url')">🔗 URL / Fichier</button>
+              </div>
+            </div>
+
+            <!-- Explorer RSS -->
+            <div id="rssExplorePanel" style="padding:0 16px;">
+              <div class="pod-search-bar">
+                <i class="ti ti-search"></i>
+                <input type="text" id="rssSearchInput" placeholder="Le Monde, tech, sport, science…"
+                       oninput="searchRssFeeds(this.value)" autocorrect="off">
+              </div>
+              <div id="rssExploreResults">
+                <div class="pod-explore-empty">Recherchez un site, un thème, un journal…</div>
+              </div>
+            </div>
+
+            <!-- URL / Fichier RSS -->
+            <div id="rssUrlPanel" style="display:none;padding:0 16px;">
+              <div class="form-label">Ajouter par URL ou fichier OPML</div>
+              <div class="smart-input-wrap">
+                <input type="url" id="feedUrlInput" placeholder="https://example.com/feed"
+                       autocorrect="off" autocapitalize="none">
+                <button class="smart-go-btn" id="discoverBtn" onclick="discoverFeed()">Ajouter</button>
+              </div>
+              <div style="margin-top:8px;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-muted);">
+                  <i class="ti ti-file-import"></i> Importer un fichier OPML / XML / Atom
+                  <input type="file" id="fileImportInput" accept=".opml,.xml,.atom,.json"
+                         style="display:none;" onchange="importFromFile(event)">
+                </label>
+              </div>
+            </div>
+
+            <!-- Suggestions & liste flux -->
+            <div id="discoveryPanel" class="discovery-panel">
+              <div id="discoveryHeader" class="discovery-header"></div>
+              <div id="discoveryResults"></div>
+            </div>
+            <div class="divider"></div>
+            <div class="section-header">MES FLUX</div>
+            <div id="feedList">
+              <div class="empty-state">
+                <i class="ti ti-world empty-icon"></i>
+                <div class="empty-title">Aucun flux</div>
+              </div>
+            </div>
+
+          </div><!-- /#srcFluxPanel -->
+
+          <!-- ── Panel Podcasts ── -->
+          <div id="srcPodPanel" style="display:none;">
+
+            <!-- Explorer / Mes podcasts -->
+            <div style="padding:0 16px 12px;">
+              <div class="pod-section-tabs">
+                <button class="pod-section-tab active" id="pod-src-explore"
+                        onclick="switchPodMode('explore')">🔍 Explorer</button>
+                <button class="pod-section-tab" id="pod-src-mine"
+                        onclick="switchPodMode('mine')">🎙 Par URL</button>
+              </div>
+            </div>
+
+            <!-- Explorer podcasts -->
+            <div id="podExplorePanel" style="padding:0 16px;">
+              <div class="pod-search-bar">
+                <i class="ti ti-search"></i>
+                <input type="text" id="podSearchInput" placeholder="Nom du podcast, auteur…"
+                       oninput="searchPodcasts(this.value)" autocorrect="off">
+              </div>
+              <div id="podExploreResults">
+                <div class="pod-explore-empty">Recherchez un podcast par nom ou auteur</div>
+              </div>
+            </div>
+
+            <!-- Par URL -->
+            <div id="podMinePanel" style="display:none;padding:0 16px;">
+              <div class="form-label">Ajouter par URL de flux RSS</div>
+              <div class="smart-input-wrap">
+                <input type="url" id="podUrlInput" placeholder="https://feed.example.com/podcast"
+                       autocorrect="off" autocapitalize="none">
+                <button class="smart-go-btn" onclick="addPodcastByUrl()">Ajouter</button>
+              </div>
+            </div>
+
+            <!-- Liste podcasts enregistrés -->
+            <div id="podSourceListHeader" class="section-header" style="display:none;">MES PODCASTS</div>
+            <div id="podcastSourceList">
+              <div class="empty-state">
+                <i class="ti ti-microphone empty-icon"></i>
+                <div class="empty-title">Aucun podcast</div>
+              </div>
+            </div>
+
+          </div><!-- /#srcPodPanel -->
+
+        </div><!-- /.scroll-area -->
+      </div><!-- /#feedsView -->
+
+    </div><!-- /#swipeTrack -->
+  </div><!-- /#swipeContainer -->
+
+
+  <!-- ── NAVIGATION BAS ── -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="nav-item active" id="nav-flux"    onclick="showView('flux')">
+      <i class="ti ti-news nav-icon"></i>
+      <span class="nav-label">Flux</span>
+    </button>
+    <button class="nav-item" id="nav-search"  onclick="showView('search')">
+      <i class="ti ti-search nav-icon"></i>
+      <span class="nav-label">Recherche</span>
+    </button>
+    <button class="nav-item" id="nav-podcast" onclick="showView('podcast')">
+      <i class="ti ti-microphone nav-icon"></i>
+      <span class="nav-label">Podcasts</span>
+    </button>
+    <button class="nav-item" id="nav-feeds"   onclick="showView('feeds')">
+      <i class="ti ti-telescope nav-icon"></i>
+      <span class="nav-label">Explorer</span>
+    </button>
+  </nav>
+
+</div><!-- /#app -->
+
+
+<!-- ══════════════════════════════════════════
+     OVERLAYS (hors flux principal)
+══════════════════════════════════════════ -->
+
+<!-- Reader article -->
+<div id="readerView">
+  <div class="reader-header">
+    <button class="reader-back" onclick="closeReader()">
+      <i class="ti ti-arrow-left"></i>
+    </button>
+    <div class="reader-source-info" style="flex:1;min-width:0;">
+      <div class="reader-source-name" id="readerSource"></div>
+      <div class="reader-date"        id="readerDate"></div>
+    </div>
+    <button class="reader-open-btn" id="readerOpenBtn" onclick="openArticleExternal()">
+      <i class="ti ti-external-link"></i> Ouvrir
+    </button>
+  </div>
+  <div class="reader-body">
+    <div id="readerTitle" class="reader-title"></div>
+    <div id="readerContent" class="reader-content"></div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div id="settingsView" class="view">
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="header-title">
+          <i class="ti ti-settings" style="font-size:22px;vertical-align:-3px;margin-right:8px;color:var(--accent);"></i>Réglages
+        </div>
+        <div class="header-sub" id="settingsVersionLabel">v2.0.0</div>
+      </div>
+      <button class="settings-top-btn" onclick="closeSettings()">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+  </div>
+  <div class="scroll-area" style="padding-bottom:var(--safe-bottom);">
+
+    <div class="section-header">Lecture</div>
+    <div class="settings-row">
+      <span class="settings-label">Marquer comme lu à l'ouverture</span>
+      <button class="toggle" id="toggleRead" onclick="toggleSetting('markRead', this)"></button>
+    </div>
+    <div class="settings-row">
+      <span class="settings-label">Afficher les images</span>
+      <button class="toggle" id="toggleImages" onclick="toggleSetting('showImages', this)"></button>
+    </div>
+
+    <div class="section-header">Sauvegarde</div>
+    <div class="settings-row" style="cursor:pointer;" onclick="saveToFile()">
+      <div>
+        <span class="settings-label">Sauvegarder dans un fichier</span>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Flux, podcasts et préférences → iCloud Drive</div>
+      </div>
+      <i class="ti ti-device-floppy" id="saveFileIcon" style="color:var(--accent);font-size:20px;"></i>
+    </div>
+    <div class="settings-row" style="cursor:pointer;" onclick="document.getElementById('restoreFileInput').click()">
+      <div>
+        <span class="settings-label">Restaurer depuis un fichier</span>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Relit un fichier de sauvegarde précédent</div>
+      </div>
+      <i class="ti ti-folder-open" style="color:var(--accent);font-size:20px;"></i>
+    </div>
+    <input type="file" id="restoreFileInput" accept="*/*" style="display:none;" onchange="restoreFromFile(event)">
+
+    <div style="height:1px;background:var(--border);margin:4px 18px;"></div>
+    <div class="settings-row" style="cursor:pointer;" onclick="toggleLegacyExport()">
+      <span class="settings-label" style="color:var(--text-muted);font-size:13px;">Partager via code texte</span>
+      <i class="ti ti-chevron-down" id="legacyExportChevron" style="color:var(--text-muted);font-size:16px;transition:transform 0.2s;"></i>
+    </div>
+    <div id="legacyExportPanel" style="display:none;padding:0 18px 12px;">
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <button onclick="exportFeedsAnim(this)" id="exportRow"
+                style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:10px;font-family:inherit;font-size:13px;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+          <i class="ti ti-copy" id="exportIcon"></i> Copier le code
+        </button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <textarea id="importInput" placeholder="Colle un code ici…"
+                  style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;color:var(--text);font-family:inherit;font-size:12px;resize:none;height:52px;outline:none;line-height:1.4;"></textarea>
+        <button id="importBtn" onclick="importFeedsAnim(this)"
+                style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:0 14px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;white-space:nowrap;">Importer</button>
+      </div>
+    </div>
+
+    <div class="section-header">À propos</div>
+    <div class="settings-row">
+      <span class="settings-label">Version</span>
+      <span class="settings-value">2.0.0</span>
+    </div>
+    <div class="settings-row">
+      <span class="settings-label">Articles en cache</span>
+      <span id="cacheCount" class="settings-value">—</span>
+    </div>
+    <div class="settings-row">
+      <span class="settings-label">Épisodes en cache</span>
+      <span id="episodeCacheCount" class="settings-value">—</span>
+    </div>
+    <div class="settings-row">
+      <span class="settings-label">Stockage utilisé</span>
+      <span id="storageCount" class="settings-value">—</span>
+    </div>
+    <div class="settings-row" style="cursor:pointer;" onclick="clearCache()">
+      <span class="settings-label" style="color:var(--red);">Vider le cache</span>
+      <i class="ti ti-trash" style="color:var(--red);"></i>
+    </div>
+
+  </div>
+</div><!-- /#settingsView -->
+
+
+<!-- Mini player podcast -->
+<div id="miniPlayer">
+  <div class="mini-player-inner">
+    <div id="miniArt" class="mini-art" onclick="openFullPlayer()">
+      <i class="ti ti-microphone" style="font-size:18px;color:var(--text-muted);"></i>
+    </div>
+    <div class="mini-info" onclick="openFullPlayer()">
+      <div class="mini-title"   id="miniTitle">—</div>
+      <div class="mini-podcast" id="miniPodcast">—</div>
+    </div>
+    <div class="mini-controls">
+      <button class="mini-btn" onclick="seekRelative(-15)" title="-15s">
+        <i class="ti ti-rewind" style="font-size:20px;"></i>
+      </button>
+      <button class="mini-btn" id="miniPlayBtn" onclick="togglePlay()">
+        <i class="ti ti-player-play" style="font-size:24px;"></i>
+      </button>
+      <button class="mini-btn" onclick="seekRelative(30)" title="+30s">
+        <i class="ti ti-fast-forward" style="font-size:20px;"></i>
+      </button>
+    </div>
+    <button class="mini-close" onclick="closePlayer()">
+      <i class="ti ti-x"></i>
+    </button>
+  </div>
+  <div class="mini-progress" onclick="seekFromMini(event)">
+    <div class="mini-progress-fill" id="miniProgress"></div>
+  </div>
+</div>
+
+<!-- Full player podcast -->
+<div id="fullPlayer">
+  <button class="fp-close" onclick="closeFullPlayer()">
+    <i class="ti ti-chevron-down"></i>
+  </button>
+  <div class="fp-handle"></div>
+  <div id="fpArt" class="fp-art">
+    <i class="ti ti-microphone" style="font-size:60px;color:var(--text-muted);"></i>
+  </div>
+  <div class="fp-podcast" id="fpPodcast">—</div>
+  <div class="fp-title"   id="fpTitle">—</div>
+  <div class="fp-seek" id="fpSeek" onclick="seekFromBar(event)">
+    <div class="fp-seek-fill" id="fpSeekFill"></div>
+  </div>
+  <div class="fp-times">
+    <span id="fpCurrentTime">0:00</span>
+    <span id="fpDuration">0:00</span>
+  </div>
+  <div class="fp-controls">
+    <button class="fp-btn" onclick="seekRelative(-15)" title="-15s" style="font-size:28px;">
+      <i class="ti ti-rewind"></i>
+    </button>
+    <button class="fp-play-btn" id="fpPlayBtn" onclick="togglePlay()">
+      <i class="ti ti-player-play"></i>
+    </button>
+    <button class="fp-btn" onclick="seekRelative(30)" title="+30s" style="font-size:28px;">
+      <i class="ti ti-fast-forward"></i>
+    </button>
+  </div>
+  <button class="fp-speed" id="fpSpeed" onclick="cycleSpeed()">1×</button>
+</div>
+
+<!-- Audio engine -->
+<audio id="podcastAudio" preload="metadata"></audio>
+
+<!-- Toast notifications -->
+<div class="toast" id="toast"></div>
+
+<!-- Error reporter (debug — retiré en production) -->
+<div id="_errBox" style="position:fixed;top:0;left:0;right:0;background:#c00;color:#fff;font-size:11px;padding:8px 10px;z-index:99999;display:none;white-space:pre-wrap;max-height:120px;overflow:auto;"></div>
+
+<!-- ── SCRIPT ── -->
+<script src="app.js"></script>
+
+</body>
+</html>
